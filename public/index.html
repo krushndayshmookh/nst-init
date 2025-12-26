@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>NST init</title>
+</head>
+<body>
+  <h1>NST init</h1>
+
+  <form id="deployForm">
+    <div>
+      <label>Your name:</label>
+      <input name="owner" required placeholder="krushn" />
+    </div>
+
+    <div>
+      <label>App name:</label>
+      <input name="appName" required placeholder="whoami" />
+    </div>
+
+    <div>
+      <label>App type:</label>
+      <select name="appType">
+        <option value="node">Node</option>
+        <option value="flask">Flask</option>
+        <option value="django">Django</option>
+        <option value="bun">Bun</option>
+        <option value="image">Generic Image</option>
+      </select>
+    </div>
+
+    <div>
+      <label>GHCR image:</label>
+      <input name="image" placeholder="ghcr.io/org/app:tag" />
+    </div>
+
+    <div>
+      <label>GitHub repo (not supported yet):</label>
+      <input name="repo" placeholder="https://github.com/org/repo" />
+    </div>
+
+    <button type="submit">Go (Deploy)</button>
+  </form>
+
+  <p id="msg"></p>
+  <p id="url"></p>
+
+  <hr />
+
+  <h2>Existing apps</h2>
+  <button id="refreshBtn">Refresh</button>
+
+  <table border="1" cellpadding="6" cellspacing="0">
+    <thead>
+      <tr>
+        <th>App</th>
+        <th>Owner</th>
+        <th>Type</th>
+        <th>URL</th>
+        <th>Created</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="appsBody">
+      <tr><td colspan="6">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    const msgEl = document.getElementById("msg");
+    const urlEl = document.getElementById("url");
+    const appsBody = document.getElementById("appsBody");
+
+    function setMsg(s) { msgEl.textContent = s || ""; }
+    function setURL(u) {
+      if (!u) { urlEl.textContent = ""; return; }
+      urlEl.innerHTML = `URL: <a href="${u}" target="_blank">${u}</a>`;
+    }
+
+    async function loadApps() {
+      setMsg("");
+      const r = await fetch("/api/apps");
+      const j = await r.json();
+      if (!j.ok) {
+        appsBody.innerHTML = `<tr><td colspan="6">${j.error || "Failed"}</td></tr>`;
+        return;
+      }
+      const apps = j.apps || [];
+      if (apps.length === 0) {
+        appsBody.innerHTML = `<tr><td colspan="6">No apps found</td></tr>`;
+        return;
+      }
+      appsBody.innerHTML = apps.map(a => `
+        <tr>
+          <td>${a.internalName}</td>
+          <td>${a.owner || ""}</td>
+          <td>${a.type || ""}</td>
+          <td>${a.url ? `<a href="${a.url}" target="_blank">${a.url}</a>` : "-"}</td>
+          <td>${a.createdAt || ""}</td>
+          <td><button data-remove="${a.internalName}">Remove</button></td>
+        </tr>
+      `).join("");
+
+      document.querySelectorAll("button[data-remove]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-remove");
+          setMsg("Removing…");
+          const rr = await fetch("/api/apps/" + encodeURIComponent(id), { method: "DELETE" });
+          const jj = await rr.json();
+          if (!jj.ok) { setMsg(jj.error || "Remove failed"); return; }
+          setMsg("Removed!");
+          await loadApps();
+        });
+      });
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", loadApps);
+
+    document.getElementById("deployForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setMsg("Deploying…");
+      setURL("");
+
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+
+      const r = await fetch("/api/apps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+      if (!j.ok) { setMsg(j.error || "Deploy failed"); return; }
+      setMsg("Deployed!");
+      setURL(j.url);
+      await loadApps();
+    });
+
+    loadApps();
+  </script>
+</body>
+</html>
