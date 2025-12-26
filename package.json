@@ -9,5 +9,8 @@
   "keywords": [],
   "author": "Krushn Dayshmookh <krushndayshmookh@gmail.com>",
   "license": "MIT",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@kubernetes/client-node": "^1.4.0"
+  }
 }
