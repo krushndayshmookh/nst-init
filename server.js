@@ -96,10 +96,10 @@ const net = kc.makeApiClient(k8s.NetworkingV1Api)
 
 async function ensureNamespace() {
   try {
-    await core.readNamespace(NS)
+    await core.readNamespace({ name: NS })
   } catch (e) {
     if (e?.response?.statusCode === 404)
-      await core.createNamespace({ metadata: { name: NS } })
+      await core.createNamespace({ body: { metadata: { name: NS } } })
     else throw e
   }
 }
@@ -138,11 +138,11 @@ async function upsertDeployment(name, owner, appType, image, containerPort) {
     },
   }
   try {
-    await apps.readNamespacedDeployment(name, NS)
-    await apps.replaceNamespacedDeployment(name, NS, body)
+    await apps.readNamespacedDeployment({ name, namespace: NS })
+    await apps.replaceNamespacedDeployment({ name, namespace: NS, body })
   } catch (e) {
     if (e?.response?.statusCode === 404)
-      await apps.createNamespacedDeployment(NS, body)
+      await apps.createNamespacedDeployment({ namespace: NS, body })
     else throw e
   }
 }
@@ -162,18 +162,18 @@ async function upsertService(name) {
     }, // patched below
   }
   try {
-    await core.readNamespacedService(name, NS) /* keep existing */
+    await core.readNamespacedService({ name, namespace: NS }) /* keep existing */
   } catch (e) {
     if (e?.response?.statusCode === 404)
-      await core.createNamespacedService(NS, body)
+      await core.createNamespacedService({ namespace: NS, body })
     else throw e
   }
 }
 
 async function replaceServicePort(name, targetPort) {
-  const svc = (await core.readNamespacedService(name, NS)).body
+  const svc = (await core.readNamespacedService({ name, namespace: NS })).body
   svc.spec.ports = [{ name: 'http', port: 80, targetPort }]
-  await core.replaceNamespacedService(name, NS, svc)
+  await core.replaceNamespacedService({ name, namespace: NS, body: svc })
 }
 
 async function upsertIngress(name, host) {
@@ -204,25 +204,21 @@ async function upsertIngress(name, host) {
     },
   }
   try {
-    await net.readNamespacedIngress(ingName, NS)
-    await net.replaceNamespacedIngress(ingName, NS, body)
+    await net.readNamespacedIngress({ name: ingName, namespace: NS });
+    await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body });
   } catch (e) {
     if (e?.response?.statusCode === 404)
-      await net.createNamespacedIngress(NS, body)
+      await net.createNamespacedIngress({ namespace: NS, body });
     else throw e
   }
 }
 
 async function listApps() {
-  const resp = await net.listNamespacedIngress(
-    NS,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    'app.kubernetes.io/managed-by=nst-init'
-  )
-  const items = resp.body.items || []
+  const resp = await net.listNamespacedIngress({
+    namespace: NS,
+    labelSelector: 'app.kubernetes.io/managed-by=nst-init',
+  })
+  const items = resp.body?.items || []
   const out = items.map((ing) => {
     const ingName = ing?.metadata?.name || ''
     const internalName = ingName.endsWith('-ing')
@@ -248,17 +244,17 @@ async function listApps() {
 async function removeApp(name) {
   const ingName = `${name}-ing`
   try {
-    await net.deleteNamespacedIngress(ingName, NS)
+    await net.deleteNamespacedIngress({ name: ingName, namespace: NS });
   } catch (e) {
     if (e?.response?.statusCode !== 404) throw e
   }
   try {
-    await core.deleteNamespacedService(name, NS)
+    await core.deleteNamespacedService({ name, namespace: NS })
   } catch (e) {
     if (e?.response?.statusCode !== 404) throw e
   }
   try {
-    await apps.deleteNamespacedDeployment(name, NS)
+    await apps.deleteNamespacedDeployment({ name, namespace: NS })
   } catch (e) {
     if (e?.response?.statusCode !== 404) throw e
   }
