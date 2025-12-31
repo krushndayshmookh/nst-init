@@ -297,7 +297,7 @@ const server = http.createServer(async (req, res) => {
         return bad(res, 'GHCR image required')
       }
 
-      await ensureNamespace()
+      // await ensureNamespace()
 
       const containerPort = defaultPortForType(appType)
       const host = `${internalName}.${APP_ZONE}`
