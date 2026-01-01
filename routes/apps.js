@@ -68,7 +68,7 @@ router.post('/', async (req, res, next) => {
     await upsertDeployment(internalName, ownerSlug, imageUrl, containerPort)
     await upsertService(internalName, containerPort)
 
-    const host = `${internalName}.${APP_ZONE}`
+    const host = `${appNameSlug}.${APP_ZONE}`
     await upsertIngress(internalName, [host], ownerSlug)
 
     console.log(`App deployed: ${internalName} at ${APP_SCHEME}://${host}`)
