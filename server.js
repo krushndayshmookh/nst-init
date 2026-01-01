@@ -77,6 +77,15 @@ function serveStatic(req, res) {
   }
 }
 
+function is404(e) {
+  return (
+    e?.response?.statusCode === 404 ||
+    e?.statusCode === 404 ||
+    e?.body?.code === 404 ||
+    (e?.message && e.message.includes('HTTP-Code: 404'))
+  )
+}
+
 const kc = new k8s.KubeConfig()
 try {
   kc.loadFromCluster()
@@ -124,7 +133,7 @@ async function upsertDeployment(name, owner, image, containerPort) {
     await apps.readNamespacedDeployment({ name, namespace: NS })
     await apps.replaceNamespacedDeployment({ name, namespace: NS, body })
   } catch (e) {
-    if (e?.response?.statusCode === 404)
+    if (is404(e))
       await apps.createNamespacedDeployment({ namespace: NS, body })
     else throw e
   }
@@ -151,7 +160,7 @@ async function upsertService(name, targetPort) {
     existing.spec.ports = [{ name: 'http', port: 80, targetPort }]
     await core.replaceNamespacedService({ name, namespace: NS, body: existing })
   } catch (e) {
-    if (e?.response?.statusCode === 404)
+    if (is404(e))
       await core.createNamespacedService({ namespace: NS, body })
     else throw e
   }
@@ -196,7 +205,7 @@ async function upsertIngress(name, hosts, owner) {
     await net.readNamespacedIngress({ name: ingName, namespace: NS })
     await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body })
   } catch (e) {
-    if (e?.response?.statusCode === 404)
+    if (is404(e))
       await net.createNamespacedIngress({ namespace: NS, body })
     else throw e
   }
@@ -235,17 +244,17 @@ async function removeApp(name) {
   try {
     await net.deleteNamespacedIngress({ name: ingName, namespace: NS });
   } catch (e) {
-    if (e?.response?.statusCode !== 404) throw e
+    if (!is404(e)) throw e
   }
   try {
     await core.deleteNamespacedService({ name, namespace: NS })
   } catch (e) {
-    if (e?.response?.statusCode !== 404) throw e
+    if (!is404(e)) throw e
   }
   try {
     await apps.deleteNamespacedDeployment({ name, namespace: NS })
   } catch (e) {
-    if (e?.response?.statusCode !== 404) throw e
+    if (!is404(e)) throw e
   }
 }
 
@@ -309,8 +318,20 @@ const server = http.createServer(async (req, res) => {
 
     return serveStatic(req, res)
   } catch (e) {
+    console.error('API Error:', {
+      method: req.method,
+      url: req.url,
+      statusCode: e?.response?.statusCode || e?.statusCode,
+      message: e?.body?.message || e?.message,
+      reason: e?.body?.reason,
+      details: e?.body?.details,
+      stack: e?.stack,
+    })
     return bad(res, 'Server error', {
-      detail: String(e?.body?.message || e?.message || e),
+      message: e?.body?.message || e?.message || String(e),
+      reason: e?.body?.reason,
+      statusCode: e?.response?.statusCode || e?.statusCode,
+      details: e?.body?.details,
     })
   }
 })
