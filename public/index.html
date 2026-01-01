@@ -22,7 +22,10 @@
       <label>GHCR image:</label>
       <input name="image" placeholder="ghcr.io/org/app:tag" />
     </div>
-
+    <div>
+      <label>Container port:</label>
+      <input name="port" type="number" placeholder="8080" min="1" max="65535" />
+    </div>
     <button type="submit">Deploy</button>
   </form>
 

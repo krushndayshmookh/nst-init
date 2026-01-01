@@ -131,11 +131,13 @@ async function upsertDeployment(name, owner, image, containerPort) {
   }
   try {
     await apps.readNamespacedDeployment({ name, namespace: NS })
+    console.log(`Updating existing deployment: ${name}`)
     await apps.replaceNamespacedDeployment({ name, namespace: NS, body })
   } catch (e) {
-    if (is404(e))
+    if (is404(e)) {
+      console.log(`Creating new deployment: ${name} in namespace: ${NS}`)
       await apps.createNamespacedDeployment({ namespace: NS, body })
-    else throw e
+    } else throw e
   }
 }
 
@@ -156,13 +158,15 @@ async function upsertService(name, targetPort) {
 
   try {
     const existing = (await core.readNamespacedService({ name, namespace: NS })).body
+    console.log(`Updating existing service: ${name}`)
     existing.spec.selector = { app: name }
     existing.spec.ports = [{ name: 'http', port: 80, targetPort }]
     await core.replaceNamespacedService({ name, namespace: NS, body: existing })
   } catch (e) {
-    if (is404(e))
+    if (is404(e)) {
+      console.log(`Creating new service: ${name} in namespace: ${NS}`)
       await core.createNamespacedService({ namespace: NS, body })
-    else throw e
+    } else throw e
   }
 }
 
@@ -203,20 +207,29 @@ async function upsertIngress(name, hosts, owner) {
 
   try {
     await net.readNamespacedIngress({ name: ingName, namespace: NS })
+    console.log(`Updating existing ingress: ${ingName}`)
     await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body })
   } catch (e) {
-    if (is404(e))
+    if (is404(e)) {
+      console.log(`Creating new ingress: ${ingName} in namespace: ${NS} with labels:`, body.metadata.labels)
       await net.createNamespacedIngress({ namespace: NS, body })
-    else throw e
+    } else throw e
   }
 }
 
 async function listApps() {
+  console.log(`Listing ingresses in namespace: ${NS} with selector: app.kubernetes.io/managed-by=nst-init`)
   const resp = await net.listNamespacedIngress({
     namespace: NS,
     labelSelector: 'app.kubernetes.io/managed-by=nst-init',
   })
   const items = resp.body?.items || []
+  console.log(`Found ${items.length} ingresses`)
+  if (items.length > 0) {
+    items.forEach(ing => {
+      console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
+    })
+  }
   const out = items.map((ing) => {
     const ingName = ing?.metadata?.name || ''
     const internalName = ingName.endsWith('-ing')
@@ -283,6 +296,7 @@ const server = http.createServer(async (req, res) => {
       const owner = slug(data.owner)
       const appName = slug(data.appName)
       const image = String(data.image || '').trim()
+      const port = parseInt(data.port, 10) || 8080
 
       if (!owner) return bad(res, 'Owner required')
       if (!appName) return bad(res, 'App name required')
@@ -292,9 +306,10 @@ const server = http.createServer(async (req, res) => {
         return bad(res, 'Invalid name (letters/numbers/dash)', { internalName })
 
       if (!image) return bad(res, 'GHCR image required')
+      if (port < 1 || port > 65535) return bad(res, 'Port must be between 1 and 65535')
 
-      await upsertDeployment(internalName, owner, image, 8080)
-      await upsertService(internalName, 8080)
+      await upsertDeployment(internalName, owner, image, port)
+      await upsertService(internalName, port)
 
       const host = `${internalName}.${APP_ZONE}`
       await upsertIngress(internalName, [host], owner)
