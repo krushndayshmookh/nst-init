@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /**
  * Centralized error handling middleware
  * Catches errors from async routes and formats response
