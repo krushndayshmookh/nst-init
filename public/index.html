@@ -38,154 +38,215 @@
     </style>
   </head>
   <body>
-    <div class="hero">
+    <div id="app">
+      <div class="hero">
+        <div class="container">
+          <h1>
+            <i
+              class="material-icons"
+              style="vertical-align: middle; font-size: 48px"
+              >cloud</i
+            >
+            NST init
+          </h1>
+          <p class="flow-text">Deploy your apps to Kubernetes in seconds</p>
+        </div>
+      </div>
+
       <div class="container">
-        <h1>
-          <i
-            class="material-icons"
-            style="vertical-align: middle; font-size: 48px"
-            >cloud</i
-          >
-          NST init
-        </h1>
-        <p class="flow-text">Deploy your apps to Kubernetes in seconds</p>
-      </div>
-    </div>
+        <div class="row">
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Deploy New App</span>
+                <form @submit.prevent="deployApp">
+                  <div class="input-field">
+                    <input
+                      id="owner"
+                      v-model="form.owner"
+                      type="text"
+                      required />
+                    <label for="owner">Your Name</label>
+                  </div>
 
-    <div class="container">
-      <div class="row">
-        <div class="col s12 m6">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">Deploy New App</span>
-              <form id="deployForm">
-                <div class="input-field">
-                  <input id="owner" name="owner" type="text" required />
-                  <label for="owner">Your Name</label>
+                  <div class="input-field">
+                    <input
+                      id="appName"
+                      v-model="form.appName"
+                      type="text"
+                      required />
+                    <label for="appName">App Name</label>
+                  </div>
+
+                  <div class="input-field">
+                    <input
+                      id="image"
+                      v-model="form.image"
+                      type="text"
+                      placeholder="ghcr.io/org/app:tag" />
+                    <label for="image">GHCR Image</label>
+                  </div>
+
+                  <div class="input-field">
+                    <input
+                      id="port"
+                      v-model="form.port"
+                      type="number"
+                      min="1"
+                      max="65535"
+                      placeholder="8080" />
+                    <label for="port">Container Port</label>
+                  </div>
+
+                  <button
+                    class="btn waves-effect waves-light btn-large purple"
+                    type="submit">
+                    Deploy
+                    <i class="material-icons right">send</i>
+                  </button>
+                </form>
+
+                <div class="msg-box">
+                  <p v-if="messageText" :class="messageClass">
+                    <i v-if="messageIcon" class="material-icons tiny"
+                      >{{ messageIcon }}</i
+                    >
+                    {{ messageText }}
+                  </p>
                 </div>
-
-                <div class="input-field">
-                  <input id="appName" name="appName" type="text" required />
-                  <label for="appName">App Name</label>
+                <div class="url-box">
+                  <p
+                    v-if="!deployedUrl"
+                    class="center-align grey-text text-lighten-1">
+                    Your app URL will appear here after deployment
+                  </p>
+                  <p v-else class="center-align">
+                    <a
+                      :href="deployedUrl"
+                      target="_blank"
+                      class="btn waves-effect waves-light green">
+                      Open App
+                      <i class="material-icons right">open_in_new</i>
+                    </a>
+                  </p>
                 </div>
-
-                <div class="input-field">
-                  <input
-                    id="image"
-                    name="image"
-                    type="text"
-                    placeholder="ghcr.io/org/app:tag" />
-                  <label for="image">GHCR Image</label>
-                </div>
-
-                <div class="input-field">
-                  <input
-                    id="port"
-                    name="port"
-                    type="number"
-                    min="1"
-                    max="65535"
-                    placeholder="8080" />
-                  <label for="port">Container Port</label>
-                </div>
-
-                <button
-                  class="btn waves-effect waves-light btn-large purple"
-                  type="submit">
-                  Deploy
-                  <i class="material-icons right">send</i>
-                </button>
-              </form>
-
-              <div class="msg-box">
-                <p id="msg" class="center-align grey-text">
-                  <i class="material-icons tiny">info</i> Fill in the form and click Deploy to get started
-                </p>
               </div>
-              <div class="url-box">
-                <p id="url" class="center-align grey-text text-lighten-1">
-                  Your app URL will appear here after deployment
-                </p>
+            </div>
+          </div>
+          <div class="col s12 m6">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">Documentation & Resources</span>
+                <ul class="collection">
+                  <li class="collection-item">
+                    <a
+                      href="https://github.com/krushndayshmookh/nst-init"
+                      target="_blank"
+                      class="blue-text">
+                      <i class="material-icons tiny">code</i> GitHub Repository
+                    </a>
+                  </li>
+                  <li class="collection-item">
+                    <a
+                      href="https://docs.docker.com/get-started/workshop/02_our_app/"
+                      target="_blank"
+                      class="blue-text">
+                      <i class="material-icons tiny">description</i> Creating
+                      Docker Images
+                    </a>
+                  </li>
+                  <li class="collection-item">
+                    <a
+                      href="https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry"
+                      target="_blank"
+                      class="blue-text">
+                      <i class="material-icons tiny">cloud_upload</i> Push to
+                      GitHub Container Registry
+                    </a>
+                  </li>
+                  <li class="collection-item">
+                    <a
+                      href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+                      target="_blank"
+                      class="blue-text">
+                      <i class="material-icons tiny">dns</i> Kubernetes
+                      Deployments
+                    </a>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="col s12 m6">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">Documentation & Resources</span>
-              <ul class="collection">
-                <li class="collection-item">
-                  <a
-                    href="https://github.com/krushndayshmookh/nst-init"
-                    target="_blank"
-                    class="blue-text">
-                    <i class="material-icons tiny">code</i> GitHub Repository
-                  </a>
-                </li>
-                <li class="collection-item">
-                  <a
-                    href="https://docs.docker.com/get-started/workshop/02_our_app/"
-                    target="_blank"
-                    class="blue-text">
-                    <i class="material-icons tiny">description</i> Creating
-                    Docker Images
-                  </a>
-                </li>
-                <li class="collection-item">
-                  <a
-                    href="https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry"
-                    target="_blank"
-                    class="blue-text">
-                    <i class="material-icons tiny">cloud_upload</i> Push to
-                    GitHub Container Registry
-                  </a>
-                </li>
-                <li class="collection-item">
-                  <a
-                    href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
-                    target="_blank"
-                    class="blue-text">
-                    <i class="material-icons tiny">dns</i> Kubernetes
-                    Deployments
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="col s12">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">
-                Deployed Apps
-                <button
-                  id="refreshBtn"
-                  class="btn-small waves-effect waves-light right blue">
-                  <i class="material-icons">refresh</i>
-                </button>
-              </span>
-              <table class="striped responsive-table highlight">
-                <thead>
-                  <tr>
-                    <th>App</th>
-                    <th>Owner</th>
-                    <th>Port</th>
-                    <th>URL</th>
-                    <th>Created</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="appsBody">
-                  <tr>
-                    <td colspan="6" class="center-align">Loading…</td>
-                  </tr>
-                </tbody>
-              </table>
+        <div class="row">
+          <div class="col s12">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">
+                  Deployed Apps
+                  <button
+                    @click="loadApps"
+                    class="btn-small waves-effect waves-light right blue">
+                    <i class="material-icons">refresh</i>
+                  </button>
+                </span>
+                <table class="striped responsive-table highlight">
+                  <thead>
+                    <tr>
+                      <th>App</th>
+                      <th>Owner</th>
+                      <th>Port</th>
+                      <th>URL</th>
+                      <th>Created</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="loading">
+                      <td colspan="6" class="center-align">Loading…</td>
+                    </tr>
+                    <tr v-else-if="apps.length === 0">
+                      <td colspan="6" class="center-align grey-text">
+                        No apps found
+                      </td>
+                    </tr>
+                    <tr v-else v-for="app in apps" :key="app.internalName">
+                      <td><strong>{{ app.internalName }}</strong></td>
+                      <td>{{ app.owner || '-' }}</td>
+                      <td>
+                        <span class="badge purple white-text"
+                          >{{ app.port || '-' }}</span
+                        >
+                      </td>
+                      <td>
+                        <template v-if="app.urls && app.urls.length">
+                          <a
+                            v-for="url in app.urls"
+                            :key="url"
+                            :href="url"
+                            target="_blank"
+                            class="blue-text">
+                            {{ url }}<br />
+                          </a>
+                        </template>
+                        <template v-else>-</template>
+                      </td>
+                      <td>
+                        {{ app.createdAt ? new
+                        Date(app.createdAt).toLocaleString() : '' }}
+                      </td>
+                      <td>
+                        <button
+                          @click="removeApp(app.internalName)"
+                          class="btn-small waves-effect waves-light red">
+                          <i class="material-icons">delete</i>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -193,123 +254,123 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-      const msgEl = document.getElementById('msg')
-      const urlEl = document.getElementById('url')
-      const appsBody = document.getElementById('appsBody')
+      const { createApp } = Vue
 
-      function setMsg(s, color = '') {
-        msgEl.textContent = s || ''
-        msgEl.className = color ? `${color}-text center-align` : 'center-align'
-      }
-      function setURL(u) {
-        if (!u) {
-          urlEl.innerHTML = ''
-          return
-        }
-        urlEl.innerHTML = `<a href="${u}" target="_blank" class="btn waves-effect waves-light green">Open App <i class="material-icons right">open_in_new</i></a>`
-      }
-
-      async function loadApps() {
-        setMsg('')
-        const r = await fetch('/api/apps')
-        const j = await r.json()
-        if (!j.ok) {
-          appsBody.innerHTML = `<tr><td colspan="6" class="center-align red-text">${
-            j.error || 'Failed'
-          }</td></tr>`
-          return
-        }
-        const apps = j.apps || []
-        if (apps.length === 0) {
-          appsBody.innerHTML = `<tr><td colspan="6" class="center-align grey-text">No apps found</td></tr>`
-          return
-        }
-        appsBody.innerHTML = apps
-          .map(
-            (a) => `
-        <tr>
-          <td><strong>${a.internalName}</strong></td>
-          <td>${a.owner || '-'}</td>
-          <td><span class="badge purple white-text">${a.port || '-'}</span></td>
-          <td>${
-            a.urls && a.urls.length
-              ? a.urls
-                  .map(
-                    (u) =>
-                      `<a href="${u}" target="_blank" class="blue-text">${u}</a>`
-                  )
-                  .join('<br/>')
-              : '-'
-          }</td>
-          <td>${a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}</td>
-          <td>
-            <button class="btn-small waves-effect waves-light red" data-remove="${
-              a.internalName
-            }">
-              <i class="material-icons">delete</i>
-            </button>
-          </td>
-        </tr>
-      `
-          )
-          .join('')
-
-        document.querySelectorAll('button[data-remove]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-remove')
-            if (!confirm(`Remove ${id}?`)) return
-            setMsg('Removing…', 'orange')
-            const rr = await fetch('/api/apps/' + encodeURIComponent(id), {
-              method: 'DELETE',
-            })
-            const jj = await rr.json()
-            if (!jj.ok) {
-              setMsg(jj.error || 'Remove failed', 'red')
-              return
-            }
-            setMsg('Removed!', 'green')
-            setTimeout(() => setMsg(''), 2000)
-            await loadApps()
-          })
-        })
-      }
-
-      document.getElementById('refreshBtn').addEventListener('click', loadApps)
-
-      document
-        .getElementById('deployForm')
-        .addEventListener('submit', async (e) => {
-          e.preventDefault()
-          setMsg('Deploying…', 'blue')
-          setURL('')
-
-          const fd = new FormData(e.target)
-          const payload = Object.fromEntries(fd.entries())
-
-          const r = await fetch('/api/apps', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-          const j = await r.json()
-          if (!j.ok) {
-            setMsg(j.error || 'Deploy failed', 'red')
-            return
+      createApp({
+        data() {
+          return {
+            form: {
+              owner: '',
+              appName: '',
+              image: '',
+              port: '',
+            },
+            messageText: 'Fill in the form and click Deploy to get started',
+            messageColor: 'grey',
+            messageIcon: 'info',
+            deployedUrl: '',
+            apps: [],
+            loading: true,
           }
-          setMsg('Deployed successfully!', 'green')
-          setURL(j.url || '')
-          e.target.reset()
+        },
+        computed: {
+          messageClass() {
+            const base = 'center-align'
+            return this.messageColor
+              ? `${this.messageColor}-text ${base}`
+              : base
+          },
+        },
+        methods: {
+          setMessage(text, color = '', icon = '') {
+            this.messageText = text
+            this.messageColor = color
+            this.messageIcon = icon
+          },
+          async loadApps() {
+            this.loading = true
+            this.setMessage('')
+            try {
+              const r = await fetch('/api/apps')
+              const j = await r.json()
+              if (!j.ok) {
+                this.apps = []
+                return
+              }
+              this.apps = j.apps || []
+            } catch (error) {
+              console.error('Failed to load apps:', error)
+              this.apps = []
+            } finally {
+              this.loading = false
+            }
+          },
+          async deployApp() {
+            this.setMessage('Deploying…', 'blue')
+            this.deployedUrl = ''
+
+            try {
+              const r = await fetch('/api/apps', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.form),
+              })
+              const j = await r.json()
+              if (!j.ok) {
+                this.setMessage(j.error || 'Deploy failed', 'red')
+                return
+              }
+              this.setMessage('Deployed successfully!', 'green')
+              this.deployedUrl = j.url || ''
+
+              // Reset form
+              this.form = { owner: '', appName: '', image: '', port: '' }
+              this.$nextTick(() => {
+                M.updateTextFields()
+              })
+
+              await this.loadApps()
+            } catch (error) {
+              this.setMessage('Deploy failed: ' + error.message, 'red')
+            }
+          },
+          async removeApp(internalName) {
+            if (!confirm(`Remove ${internalName}?`)) return
+
+            this.setMessage('Removing…', 'orange')
+            try {
+              const r = await fetch(
+                '/api/apps/' + encodeURIComponent(internalName),
+                {
+                  method: 'DELETE',
+                }
+              )
+              const j = await r.json()
+              if (!j.ok) {
+                this.setMessage(j.error || 'Remove failed', 'red')
+                return
+              }
+              this.setMessage('Removed!', 'green')
+              setTimeout(() => {
+                this.setMessage(
+                  'Fill in the form and click Deploy to get started',
+                  'grey',
+                  'info'
+                )
+              }, 2000)
+              await this.loadApps()
+            } catch (error) {
+              this.setMessage('Remove failed: ' + error.message, 'red')
+            }
+          },
+        },
+        mounted() {
+          this.loadApps()
           M.updateTextFields()
-          await loadApps()
-        })
-
-      loadApps()
-
-      // Initialize Materialize components
-      document.addEventListener('DOMContentLoaded', function () {
-        M.updateTextFields()
-      })
+        },
+      }).mount('#app')
     </script>
   </body>
 </html>
