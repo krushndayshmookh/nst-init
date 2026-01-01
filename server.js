@@ -14,7 +14,8 @@ const APP_ZONE = (process.env.APP_ZONE || 'nstsdc.org').trim()
 const APP_SCHEME = (process.env.APP_SCHEME || 'https').trim()
 const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, 'public')
 
-console.log('ENV:', { PORT, NS, APP_ZONE, APP_SCHEME, PUBLIC_DIR })
+console.log('Starting NST init server...')
+console.log(`Namespace: ${NS}, Zone: ${APP_ZONE}, Port: ${PORT}`)
 
 function json(res, code, obj) {
   const body = JSON.stringify(obj)
@@ -131,11 +132,11 @@ async function upsertDeployment(name, owner, image, containerPort) {
   }
   try {
     await apps.readNamespacedDeployment({ name, namespace: NS })
-    console.log(`Updating existing deployment: ${name}`)
+    console.log(`Updated deployment: ${name}`)
     await apps.replaceNamespacedDeployment({ name, namespace: NS, body })
   } catch (e) {
     if (is404(e)) {
-      console.log(`Creating new deployment: ${name} in namespace: ${NS}`)
+      console.log(`Created deployment: ${name}`)
       await apps.createNamespacedDeployment({ namespace: NS, body })
     } else throw e
   }
@@ -158,13 +159,13 @@ async function upsertService(name, targetPort) {
 
   try {
     const existing = await core.readNamespacedService({ name, namespace: NS })
-    console.log(`Updating existing service: ${name}`)
+    console.log(`Updated service: ${name}`)
     existing.spec.selector = { app: name }
     existing.spec.ports = [{ name: 'http', port: 80, targetPort }]
     await core.replaceNamespacedService({ name, namespace: NS, body: existing })
   } catch (e) {
     if (is404(e)) {
-      console.log(`Creating new service: ${name} in namespace: ${NS}`)
+      console.log(`Created service: ${name}`)
       await core.createNamespacedService({ namespace: NS, body })
     } else throw e
   }
@@ -207,95 +208,84 @@ async function upsertIngress(name, hosts, owner) {
 
   try {
     await net.readNamespacedIngress({ name: ingName, namespace: NS })
-    console.log(`Updating existing ingress: ${ingName}`)
+    console.log(`Updated ingress: ${ingName}`)
     await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body })
   } catch (e) {
     if (is404(e)) {
-      console.log(`Creating new ingress: ${ingName} in namespace: ${NS} with labels:`, body.metadata.labels)
+      console.log(`Created ingress: ${ingName}`)
       await net.createNamespacedIngress({ namespace: NS, body })
     } else throw e
   }
 }
 
 async function listApps() {
-  console.log(`Listing ingresses in namespace: ${NS} with selector: app.kubernetes.io/managed-by=nst-init`)
-  try {
-    const resp = await net.listNamespacedIngress({
-      namespace: NS,
-      labelSelector: 'app.kubernetes.io/managed-by=nst-init',
-    })
-    console.log('API Response status:', resp.response?.statusCode)
-    const items = resp.items || []
-    console.log(`Found ${items.length} ingresses`)
-    if (items.length > 0) {
-      items.forEach(ing => {
-        console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
-      })
-    } else {
-      // Try listing ALL ingresses to debug
-      console.log('Attempting to list all ingresses in namespace (no label filter)...')
-      const allResp = await net.listNamespacedIngress({ namespace: NS })
-      const allItems = allResp.items || []
-      console.log(`Total ingresses in namespace: ${allItems.length}`)
-      allItems.forEach(ing => {
-        console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
-      })
+  const resp = await net.listNamespacedIngress({
+    namespace: NS,
+    labelSelector: 'app.kubernetes.io/managed-by=nst-init',
+  })
+  const items = resp.items || []
+  console.log(`Listed ${items.length} app(s)`)
+
+  const out = items.map((ing) => {
+    const ingName = ing?.metadata?.name || ''
+    const internalName = ingName.endsWith('-ing')
+      ? ingName.slice(0, -4)
+      : ingName
+    const hosts = (ing?.spec?.rules || []).map((r) => r?.host).filter(Boolean)
+    const owner = ing?.metadata?.labels?.['nst.owner'] || ''
+    const createdAt = ing?.metadata?.creationTimestamp || ''
+    return {
+      internalName,
+      owner,
+      hosts,
+      urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
+      createdAt,
     }
-    const out = items.map((ing) => {
-      const ingName = ing?.metadata?.name || ''
-      const internalName = ingName.endsWith('-ing')
-        ? ingName.slice(0, -4)
-        : ingName
-      const hosts = (ing?.spec?.rules || [])
-        .map((r) => r?.host)
-        .filter(Boolean)
-      const owner = ing?.metadata?.labels?.['nst.owner'] || ''
-      const createdAt = ing?.metadata?.creationTimestamp || ''
-      return {
-        internalName,
-        owner,
-        hosts,
-        urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
-        createdAt,
-      }
-    })
-    
-    // Fetch port information from services
-    for (const app of out) {
-      try {
-        const svc = await core.readNamespacedService({ name: app.internalName, namespace: NS })
-        app.port = svc.spec?.ports?.[0]?.targetPort || null
-      } catch (e) {
-        console.error(`Error fetching service for app ${app.internalName}:`, e)
-        app.port = null
-      }
+  })
+
+  // Fetch port information from services
+  for (const app of out) {
+    try {
+      const svc = await core.readNamespacedService({
+        name: app.internalName,
+        namespace: NS,
+      })
+      app.port = svc.spec?.ports?.[0]?.targetPort || null
+    } catch (e) {
+      console.error(`Failed to get service for ${app.internalName}:`, e?.message || e)
+      app.port = null
     }
-    
-    out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    return out
-  } catch (error) {
-    console.error('Error listing ingresses:', error)
-    throw error
   }
+
+  out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+  return out
 }
 
 async function removeApp(name) {
+  console.log(`Deleting app: ${name}`)
   const ingName = `${name}-ing`
+
+  let deleted = []
   try {
-    await net.deleteNamespacedIngress({ name: ingName, namespace: NS });
+    await net.deleteNamespacedIngress({ name: ingName, namespace: NS })
+    deleted.push('ingress')
   } catch (e) {
     if (!is404(e)) throw e
   }
   try {
     await core.deleteNamespacedService({ name, namespace: NS })
+    deleted.push('service')
   } catch (e) {
     if (!is404(e)) throw e
   }
   try {
     await apps.deleteNamespacedDeployment({ name, namespace: NS })
+    deleted.push('deployment')
   } catch (e) {
     if (!is404(e)) throw e
   }
+
+  console.log(`Deleted app ${name}: ${deleted.join(', ')}`)
 }
 
 const server = http.createServer(async (req, res) => {
@@ -333,13 +323,18 @@ const server = http.createServer(async (req, res) => {
         return bad(res, 'Invalid name (letters/numbers/dash)', { internalName })
 
       if (!image) return bad(res, 'GHCR image required')
-      if (port < 1 || port > 65535) return bad(res, 'Port must be between 1 and 65535')
+      if (port < 1 || port > 65535)
+        return bad(res, 'Port must be between 1 and 65535')
+
+      console.log(`Deploying app: ${internalName} (${image}:${port})`)
 
       await upsertDeployment(internalName, owner, image, port)
       await upsertService(internalName, port)
 
       const host = `${internalName}.${APP_ZONE}`
       await upsertIngress(internalName, [host], owner)
+
+      console.log(`App deployed: ${internalName} at ${APP_SCHEME}://${host}`)
 
       return json(res, 200, {
         ok: true,
@@ -360,15 +355,7 @@ const server = http.createServer(async (req, res) => {
 
     return serveStatic(req, res)
   } catch (e) {
-    console.error('API Error:', {
-      method: req.method,
-      url: req.url,
-      statusCode: e?.response?.statusCode || e?.statusCode,
-      message: e?.body?.message || e?.message,
-      reason: e?.body?.reason,
-      details: e?.body?.details,
-      stack: e?.stack,
-    })
+    console.error(`Error [${req.method} ${req.url}]:`, e?.message || String(e))
     return bad(res, 'Server error', {
       message: e?.body?.message || e?.message || String(e),
       reason: e?.body?.reason,
@@ -378,4 +365,4 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-server.listen(PORT, () => console.log(`NST init running on :${PORT}`))
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`))
