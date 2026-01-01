@@ -4,18 +4,17 @@ const path = require('path')
 const k8s = require('@kubernetes/client-node')
 
 const PORT = process.env.PORT || 8080
-
-// HARDEN: never allow empty namespace
 const NS = (process.env.K8S_NAMESPACE || 'apps').trim()
 if (!NS) {
   console.error('FATAL: K8S_NAMESPACE is empty')
   process.exit(1)
 }
 
-const APP_ZONE = (process.env.APP_ZONE || 'dayshmookh.work').trim()
+const APP_ZONE = (process.env.APP_ZONE || 'nstsdc.org').trim()
+const APP_SCHEME = (process.env.APP_SCHEME || 'https').trim()
 const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, 'public')
 
-console.log('ENV:', { PORT, NS, APP_ZONE, PUBLIC_DIR })
+console.log('ENV:', { PORT, NS, APP_ZONE, APP_SCHEME, PUBLIC_DIR })
 
 function json(res, code, obj) {
   const body = JSON.stringify(obj)
@@ -38,21 +37,6 @@ function validateK8sName(name) {
     !!name && name.length <= 63 && /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name)
   )
 }
-function defaultPortForType(t) {
-  switch (t) {
-    case 'node':
-      return 3000
-    case 'bun':
-      return 3000
-    case 'flask':
-      return 5000
-    case 'django':
-      return 8000
-    case 'image':
-    default:
-      return 8080
-  }
-}
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = ''
@@ -71,9 +55,19 @@ function serveStatic(req, res) {
     const ext = path.extname(full).toLowerCase()
     const type =
       ext === '.html'
-        ? 'text/html'
+        ? 'text/html; charset=utf-8'
         : ext === '.js'
-        ? 'text/javascript'
+        ? 'text/javascript; charset=utf-8'
+        : ext === '.css'
+        ? 'text/css; charset=utf-8'
+        : ext === '.json'
+        ? 'application/json; charset=utf-8'
+        : ext === '.svg'
+        ? 'image/svg+xml'
+        : ext === '.png'
+        ? 'image/png'
+        : ext === '.jpg' || ext === '.jpeg'
+        ? 'image/jpeg'
         : 'application/octet-stream'
     res.writeHead(200, { 'Content-Type': type })
     res.end(data)
@@ -94,17 +88,7 @@ const core = kc.makeApiClient(k8s.CoreV1Api)
 const apps = kc.makeApiClient(k8s.AppsV1Api)
 const net = kc.makeApiClient(k8s.NetworkingV1Api)
 
-async function ensureNamespace() {
-  try {
-    await core.readNamespace({ name: NS })
-  } catch (e) {
-    if (e?.response?.statusCode === 404)
-      await core.createNamespace({ body: { metadata: { name: NS } } })
-    else throw e
-  }
-}
-
-async function upsertDeployment(name, owner, appType, image, containerPort) {
+async function upsertDeployment(name, owner, image, containerPort) {
   const body = {
     apiVersion: 'apps/v1',
     kind: 'Deployment',
@@ -114,7 +98,6 @@ async function upsertDeployment(name, owner, appType, image, containerPort) {
       labels: {
         'app.kubernetes.io/managed-by': 'nst-init',
         'nst.owner': owner,
-        'nst.type': appType,
       },
     },
     spec: {
@@ -122,7 +105,7 @@ async function upsertDeployment(name, owner, appType, image, containerPort) {
       selector: { matchLabels: { app: name } },
       template: {
         metadata: {
-          labels: { app: name, 'nst.owner': owner, 'nst.type': appType },
+          labels: { app: name, 'nst.owner': owner },
         },
         spec: {
           containers: [
@@ -147,7 +130,7 @@ async function upsertDeployment(name, owner, appType, image, containerPort) {
   }
 }
 
-async function upsertService(name) {
+async function upsertService(name, targetPort) {
   const body = {
     apiVersion: 'v1',
     kind: 'Service',
@@ -158,11 +141,15 @@ async function upsertService(name) {
     },
     spec: {
       selector: { app: name },
-      ports: [{ name: 'http', port: 80, targetPort: 1 }],
-    }, // patched below
+      ports: [{ name: 'http', port: 80, targetPort }],
+    },
   }
+
   try {
-    await core.readNamespacedService({ name, namespace: NS }) /* keep existing */
+    const existing = (await core.readNamespacedService({ name, namespace: NS })).body
+    existing.spec.selector = { app: name }
+    existing.spec.ports = [{ name: 'http', port: 80, targetPort }]
+    await core.replaceNamespacedService({ name, namespace: NS, body: existing })
   } catch (e) {
     if (e?.response?.statusCode === 404)
       await core.createNamespacedService({ namespace: NS, body })
@@ -170,45 +157,47 @@ async function upsertService(name) {
   }
 }
 
-async function replaceServicePort(name, targetPort) {
-  const svc = (await core.readNamespacedService({ name, namespace: NS })).body
-  svc.spec.ports = [{ name: 'http', port: 80, targetPort }]
-  await core.replaceNamespacedService({ name, namespace: NS, body: svc })
-}
-
-async function upsertIngress(name, host) {
+async function upsertIngress(name, hosts, owner) {
   const ingName = `${name}-ing`
+  const rules = (hosts || [])
+    .map((h) => String(h || '').trim())
+    .filter(Boolean)
+    .map((host) => ({
+      host,
+      http: {
+        paths: [
+          {
+            path: '/',
+            pathType: 'Prefix',
+            backend: { service: { name, port: { number: 80 } } },
+          },
+        ],
+      },
+    }))
+
   const body = {
     apiVersion: 'networking.k8s.io/v1',
     kind: 'Ingress',
     metadata: {
       name: ingName,
       namespace: NS,
-      labels: { 'app.kubernetes.io/managed-by': 'nst-init' },
+      labels: {
+        'app.kubernetes.io/managed-by': 'nst-init',
+        'nst.owner': owner,
+      },
     },
     spec: {
-      rules: [
-        {
-          host,
-          http: {
-            paths: [
-              {
-                path: '/',
-                pathType: 'Prefix',
-                backend: { service: { name, port: { number: 80 } } },
-              },
-            ],
-          },
-        },
-      ],
+      ingressClassName: 'traefik',
+      rules,
     },
   }
+
   try {
-    await net.readNamespacedIngress({ name: ingName, namespace: NS });
-    await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body });
+    await net.readNamespacedIngress({ name: ingName, namespace: NS })
+    await net.replaceNamespacedIngress({ name: ingName, namespace: NS, body })
   } catch (e) {
     if (e?.response?.statusCode === 404)
-      await net.createNamespacedIngress({ namespace: NS, body });
+      await net.createNamespacedIngress({ namespace: NS, body })
     else throw e
   }
 }
@@ -224,16 +213,16 @@ async function listApps() {
     const internalName = ingName.endsWith('-ing')
       ? ingName.slice(0, -4)
       : ingName
-    const host = ing?.spec?.rules?.[0]?.host || ''
+    const hosts = (ing?.spec?.rules || [])
+      .map((r) => r?.host)
+      .filter(Boolean)
     const owner = ing?.metadata?.labels?.['nst.owner'] || ''
-    const type = ing?.metadata?.labels?.['nst.type'] || ''
     const createdAt = ing?.metadata?.creationTimestamp || ''
     return {
       internalName,
       owner,
-      type,
-      host,
-      url: host ? `https://${host}` : '',
+      hosts,
+      urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
       createdAt,
     }
   })
@@ -264,6 +253,10 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`)
 
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      return json(res, 200, { ok: true, status: 'up', ns: NS, zone: APP_ZONE })
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/apps') {
       const apps = await listApps()
       return json(res, 200, { ok: true, apps })
@@ -280,9 +273,7 @@ const server = http.createServer(async (req, res) => {
 
       const owner = slug(data.owner)
       const appName = slug(data.appName)
-      const appType = String(data.appType || 'image').toLowerCase()
       const image = String(data.image || '').trim()
-      const repo = String(data.repo || '').trim()
 
       if (!owner) return bad(res, 'Owner required')
       if (!appName) return bad(res, 'App name required')
@@ -291,24 +282,20 @@ const server = http.createServer(async (req, res) => {
       if (!validateK8sName(internalName))
         return bad(res, 'Invalid name (letters/numbers/dash)', { internalName })
 
-      if (!image) {
-        if (repo)
-          return bad(res, 'Repo deploy not supported yet. Provide GHCR image.')
-        return bad(res, 'GHCR image required')
-      }
+      if (!image) return bad(res, 'GHCR image required')
 
-      // await ensureNamespace()
+      await upsertDeployment(internalName, owner, image, 8080)
+      await upsertService(internalName, 8080)
 
-      const containerPort = defaultPortForType(appType)
       const host = `${internalName}.${APP_ZONE}`
-      const urlOut = `https://${host}`
+      await upsertIngress(internalName, [host], owner)
 
-      await upsertDeployment(internalName, owner, appType, image, containerPort)
-      await upsertService(internalName)
-      await replaceServicePort(internalName, containerPort)
-      await upsertIngress(internalName, host)
-
-      return json(res, 200, { ok: true, internalName, url: urlOut })
+      return json(res, 200, {
+        ok: true,
+        internalName,
+        host,
+        url: `${APP_SCHEME}://${host}`,
+      })
     }
 
     if (req.method === 'DELETE' && url.pathname.startsWith('/api/apps/')) {
