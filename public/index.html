@@ -1,131 +1,315 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>NST init</title>
-</head>
-<body>
-  <h1>NST init</h1>
-
-  <form id="deployForm">
-    <div>
-      <label>Your name:</label>
-      <input name="owner" required placeholder="krushn" />
-    </div>
-
-    <div>
-      <label>App name:</label>
-      <input name="appName" required placeholder="whoami" />
-    </div>
-
-    <div>
-      <label>GHCR image:</label>
-      <input name="image" placeholder="ghcr.io/org/app:tag" />
-    </div>
-    <div>
-      <label>Container port:</label>
-      <input name="port" type="number" placeholder="8080" min="1" max="65535" />
-    </div>
-    <button type="submit">Deploy</button>
-  </form>
-
-  <p id="msg"></p>
-  <p id="url"></p>
-
-  <hr />
-
-  <h2>Existing apps</h2>
-  <button id="refreshBtn">Refresh</button>
-
-  <table border="1" cellpadding="6" cellspacing="0">
-    <thead>
-      <tr>
-        <th>App</th>
-        <th>Owner</th>
-        <th>Port</th>
-        <th>URL</th>
-        <th>Created</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody id="appsBody">
-      <tr><td colspan="6">Loading…</td></tr>
-    </tbody>
-  </table>
-
-  <script>
-    const msgEl = document.getElementById("msg");
-    const urlEl = document.getElementById("url");
-    const appsBody = document.getElementById("appsBody");
-
-    function setMsg(s) { msgEl.textContent = s || ""; }
-    function setURL(u) {
-      if (!u) { urlEl.textContent = ""; return; }
-      urlEl.innerHTML = `URL: <a href="${u}" target="_blank">${u}</a>`;
-    }
-
-    async function loadApps() {
-      setMsg("");
-      const r = await fetch("/api/apps");
-      const j = await r.json();
-      if (!j.ok) {
-        appsBody.innerHTML = `<tr><td colspan="6">${j.error || "Failed"}</td></tr>`;
-        return;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NST init</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet" />
+    <style>
+      body {
+        background: #f5f5f5;
       }
-      const apps = j.apps || [];
-      if (apps.length === 0) {
-        appsBody.innerHTML = `<tr><td colspan="6">No apps found</td></tr>`;
-        return;
+      .hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px 0;
+        margin-bottom: 30px;
       }
-      appsBody.innerHTML = apps.map(a => `
+      .hero h1 {
+        margin: 0;
+        font-weight: 300;
+      }
+      .card {
+        border-radius: 8px;
+      }
+      .msg-box {
+        min-height: 24px;
+        margin: 10px 0;
+      }
+      .url-box {
+        min-height: 24px;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hero">
+      <div class="container">
+        <h1>
+          <i
+            class="material-icons"
+            style="vertical-align: middle; font-size: 48px"
+            >cloud</i
+          >
+          NST init
+        </h1>
+        <p class="flow-text">Deploy your apps to Kubernetes in seconds</p>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col s12 m6">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Deploy New App</span>
+              <form id="deployForm">
+                <div class="input-field">
+                  <input id="owner" name="owner" type="text" required />
+                  <label for="owner">Your Name</label>
+                </div>
+
+                <div class="input-field">
+                  <input id="appName" name="appName" type="text" required />
+                  <label for="appName">App Name</label>
+                </div>
+
+                <div class="input-field">
+                  <input
+                    id="image"
+                    name="image"
+                    type="text"
+                    placeholder="ghcr.io/org/app:tag" />
+                  <label for="image">GHCR Image</label>
+                </div>
+
+                <div class="input-field">
+                  <input
+                    id="port"
+                    name="port"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    placeholder="8080" />
+                  <label for="port">Container Port</label>
+                </div>
+
+                <button
+                  class="btn waves-effect waves-light btn-large purple"
+                  type="submit">
+                  Deploy
+                  <i class="material-icons right">send</i>
+                </button>
+              </form>
+
+              <div class="msg-box">
+                <p id="msg" class="center-align grey-text">
+                  <i class="material-icons tiny">info</i> Fill in the form and click Deploy to get started
+                </p>
+              </div>
+              <div class="url-box">
+                <p id="url" class="center-align grey-text text-lighten-1">
+                  Your app URL will appear here after deployment
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col s12 m6">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Documentation & Resources</span>
+              <ul class="collection">
+                <li class="collection-item">
+                  <a
+                    href="https://github.com/krushndayshmookh/nst-init"
+                    target="_blank"
+                    class="blue-text">
+                    <i class="material-icons tiny">code</i> GitHub Repository
+                  </a>
+                </li>
+                <li class="collection-item">
+                  <a
+                    href="https://docs.docker.com/get-started/workshop/02_our_app/"
+                    target="_blank"
+                    class="blue-text">
+                    <i class="material-icons tiny">description</i> Creating
+                    Docker Images
+                  </a>
+                </li>
+                <li class="collection-item">
+                  <a
+                    href="https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry"
+                    target="_blank"
+                    class="blue-text">
+                    <i class="material-icons tiny">cloud_upload</i> Push to
+                    GitHub Container Registry
+                  </a>
+                </li>
+                <li class="collection-item">
+                  <a
+                    href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+                    target="_blank"
+                    class="blue-text">
+                    <i class="material-icons tiny">dns</i> Kubernetes
+                    Deployments
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col s12">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">
+                Deployed Apps
+                <button
+                  id="refreshBtn"
+                  class="btn-small waves-effect waves-light right blue">
+                  <i class="material-icons">refresh</i>
+                </button>
+              </span>
+              <table class="striped responsive-table highlight">
+                <thead>
+                  <tr>
+                    <th>App</th>
+                    <th>Owner</th>
+                    <th>Port</th>
+                    <th>URL</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="appsBody">
+                  <tr>
+                    <td colspan="6" class="center-align">Loading…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+      const msgEl = document.getElementById('msg')
+      const urlEl = document.getElementById('url')
+      const appsBody = document.getElementById('appsBody')
+
+      function setMsg(s, color = '') {
+        msgEl.textContent = s || ''
+        msgEl.className = color ? `${color}-text center-align` : 'center-align'
+      }
+      function setURL(u) {
+        if (!u) {
+          urlEl.innerHTML = ''
+          return
+        }
+        urlEl.innerHTML = `<a href="${u}" target="_blank" class="btn waves-effect waves-light green">Open App <i class="material-icons right">open_in_new</i></a>`
+      }
+
+      async function loadApps() {
+        setMsg('')
+        const r = await fetch('/api/apps')
+        const j = await r.json()
+        if (!j.ok) {
+          appsBody.innerHTML = `<tr><td colspan="6" class="center-align red-text">${
+            j.error || 'Failed'
+          }</td></tr>`
+          return
+        }
+        const apps = j.apps || []
+        if (apps.length === 0) {
+          appsBody.innerHTML = `<tr><td colspan="6" class="center-align grey-text">No apps found</td></tr>`
+          return
+        }
+        appsBody.innerHTML = apps
+          .map(
+            (a) => `
         <tr>
-          <td>${a.internalName}</td>
-          <td>${a.owner || ""}</td>
-          <td>${a.port || "-"}</td>
-          <td>${(a.urls && a.urls.length)
-            ? a.urls.map(u => `<a href="${u}" target="_blank">${u}</a>`).join('<br/>')
-            : "-"}</td>
-          <td>${a.createdAt || ""}</td>
-          <td><button data-remove="${a.internalName}">Remove</button></td>
+          <td><strong>${a.internalName}</strong></td>
+          <td>${a.owner || '-'}</td>
+          <td><span class="badge purple white-text">${a.port || '-'}</span></td>
+          <td>${
+            a.urls && a.urls.length
+              ? a.urls
+                  .map(
+                    (u) =>
+                      `<a href="${u}" target="_blank" class="blue-text">${u}</a>`
+                  )
+                  .join('<br/>')
+              : '-'
+          }</td>
+          <td>${a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}</td>
+          <td>
+            <button class="btn-small waves-effect waves-light red" data-remove="${
+              a.internalName
+            }">
+              <i class="material-icons">delete</i>
+            </button>
+          </td>
         </tr>
-      `).join("");
+      `
+          )
+          .join('')
 
-      document.querySelectorAll("button[data-remove]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const id = btn.getAttribute("data-remove");
-          setMsg("Removing…");
-          const rr = await fetch("/api/apps/" + encodeURIComponent(id), { method: "DELETE" });
-          const jj = await rr.json();
-          if (!jj.ok) { setMsg(jj.error || "Remove failed"); return; }
-          setMsg("Removed!");
-          await loadApps();
-        });
-      });
-    }
+        document.querySelectorAll('button[data-remove]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-remove')
+            if (!confirm(`Remove ${id}?`)) return
+            setMsg('Removing…', 'orange')
+            const rr = await fetch('/api/apps/' + encodeURIComponent(id), {
+              method: 'DELETE',
+            })
+            const jj = await rr.json()
+            if (!jj.ok) {
+              setMsg(jj.error || 'Remove failed', 'red')
+              return
+            }
+            setMsg('Removed!', 'green')
+            setTimeout(() => setMsg(''), 2000)
+            await loadApps()
+          })
+        })
+      }
 
-    document.getElementById("refreshBtn").addEventListener("click", loadApps);
+      document.getElementById('refreshBtn').addEventListener('click', loadApps)
 
-    document.getElementById("deployForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      setMsg("Deploying…");
-      setURL("");
+      document
+        .getElementById('deployForm')
+        .addEventListener('submit', async (e) => {
+          e.preventDefault()
+          setMsg('Deploying…', 'blue')
+          setURL('')
 
-      const fd = new FormData(e.target);
-      const payload = Object.fromEntries(fd.entries());
+          const fd = new FormData(e.target)
+          const payload = Object.fromEntries(fd.entries())
 
-      const r = await fetch("/api/apps", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const j = await r.json();
-      if (!j.ok) { setMsg(j.error || "Deploy failed"); return; }
-      setMsg("Deployed!");
-      setURL(j.url || "");
-      await loadApps();
-    });
+          const r = await fetch('/api/apps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const j = await r.json()
+          if (!j.ok) {
+            setMsg(j.error || 'Deploy failed', 'red')
+            return
+          }
+          setMsg('Deployed successfully!', 'green')
+          setURL(j.url || '')
+          e.target.reset()
+          M.updateTextFields()
+          await loadApps()
+        })
 
-    loadApps();
-  </script>
-</body>
+      loadApps()
+
+      // Initialize Materialize components
+      document.addEventListener('DOMContentLoaded', function () {
+        M.updateTextFields()
+      })
+    </script>
+  </body>
 </html>
