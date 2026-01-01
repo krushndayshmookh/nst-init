@@ -42,13 +42,14 @@
       <tr>
         <th>App</th>
         <th>Owner</th>
+        <th>Port</th>
         <th>URL</th>
         <th>Created</th>
         <th>Action</th>
       </tr>
     </thead>
     <tbody id="appsBody">
-      <tr><td colspan="5">Loading…</td></tr>
+      <tr><td colspan="6">Loading…</td></tr>
     </tbody>
   </table>
 
@@ -68,18 +69,19 @@
       const r = await fetch("/api/apps");
       const j = await r.json();
       if (!j.ok) {
-        appsBody.innerHTML = `<tr><td colspan="5">${j.error || "Failed"}</td></tr>`;
+        appsBody.innerHTML = `<tr><td colspan="6">${j.error || "Failed"}</td></tr>`;
         return;
       }
       const apps = j.apps || [];
       if (apps.length === 0) {
-        appsBody.innerHTML = `<tr><td colspan="5">No apps found</td></tr>`;
+        appsBody.innerHTML = `<tr><td colspan="6">No apps found</td></tr>`;
         return;
       }
       appsBody.innerHTML = apps.map(a => `
         <tr>
           <td>${a.internalName}</td>
           <td>${a.owner || ""}</td>
+          <td>${a.port || "-"}</td>
           <td>${(a.urls && a.urls.length)
             ? a.urls.map(u => `<a href="${u}" target="_blank">${u}</a>`).join('<br/>')
             : "-"}</td>
@@ -119,7 +121,7 @@
       const j = await r.json();
       if (!j.ok) { setMsg(j.error || "Deploy failed"); return; }
       setMsg("Deployed!");
-      setURL((j.urls && j.urls[0]) || "");
+      setURL(j.url || "");
       await loadApps();
     });
 

@@ -157,7 +157,7 @@ async function upsertService(name, targetPort) {
   }
 
   try {
-    const existing = (await core.readNamespacedService({ name, namespace: NS })).body
+    const existing = await core.readNamespacedService({ name, namespace: NS })
     console.log(`Updating existing service: ${name}`)
     existing.spec.selector = { app: name }
     existing.spec.ports = [{ name: 'http', port: 80, targetPort }]
@@ -219,37 +219,64 @@ async function upsertIngress(name, hosts, owner) {
 
 async function listApps() {
   console.log(`Listing ingresses in namespace: ${NS} with selector: app.kubernetes.io/managed-by=nst-init`)
-  const resp = await net.listNamespacedIngress({
-    namespace: NS,
-    labelSelector: 'app.kubernetes.io/managed-by=nst-init',
-  })
-  const items = resp.body?.items || []
-  console.log(`Found ${items.length} ingresses`)
-  if (items.length > 0) {
-    items.forEach(ing => {
-      console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
+  try {
+    const resp = await net.listNamespacedIngress({
+      namespace: NS,
+      labelSelector: 'app.kubernetes.io/managed-by=nst-init',
     })
-  }
-  const out = items.map((ing) => {
-    const ingName = ing?.metadata?.name || ''
-    const internalName = ingName.endsWith('-ing')
-      ? ingName.slice(0, -4)
-      : ingName
-    const hosts = (ing?.spec?.rules || [])
-      .map((r) => r?.host)
-      .filter(Boolean)
-    const owner = ing?.metadata?.labels?.['nst.owner'] || ''
-    const createdAt = ing?.metadata?.creationTimestamp || ''
-    return {
-      internalName,
-      owner,
-      hosts,
-      urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
-      createdAt,
+    console.log('API Response status:', resp.response?.statusCode)
+    const items = resp.items || []
+    console.log(`Found ${items.length} ingresses`)
+    if (items.length > 0) {
+      items.forEach(ing => {
+        console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
+      })
+    } else {
+      // Try listing ALL ingresses to debug
+      console.log('Attempting to list all ingresses in namespace (no label filter)...')
+      const allResp = await net.listNamespacedIngress({ namespace: NS })
+      const allItems = allResp.items || []
+      console.log(`Total ingresses in namespace: ${allItems.length}`)
+      allItems.forEach(ing => {
+        console.log(`  - ${ing?.metadata?.name}: labels =`, ing?.metadata?.labels)
+      })
     }
-  })
-  out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-  return out
+    const out = items.map((ing) => {
+      const ingName = ing?.metadata?.name || ''
+      const internalName = ingName.endsWith('-ing')
+        ? ingName.slice(0, -4)
+        : ingName
+      const hosts = (ing?.spec?.rules || [])
+        .map((r) => r?.host)
+        .filter(Boolean)
+      const owner = ing?.metadata?.labels?.['nst.owner'] || ''
+      const createdAt = ing?.metadata?.creationTimestamp || ''
+      return {
+        internalName,
+        owner,
+        hosts,
+        urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
+        createdAt,
+      }
+    })
+    
+    // Fetch port information from services
+    for (const app of out) {
+      try {
+        const svc = await core.readNamespacedService({ name: app.internalName, namespace: NS })
+        app.port = svc.spec?.ports?.[0]?.targetPort || null
+      } catch (e) {
+        console.error(`Error fetching service for app ${app.internalName}:`, e)
+        app.port = null
+      }
+    }
+    
+    out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    return out
+  } catch (error) {
+    console.error('Error listing ingresses:', error)
+    throw error
+  }
 }
 
 async function removeApp(name) {
