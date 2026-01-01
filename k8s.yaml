@@ -56,6 +56,14 @@ spec:
               value: "apps"
             - name: APP_ZONE
               value: "nstsdc.org"
+            - name: GITHUB_CLIENT_ID
+              value: "your-github-client-id"
+            - name: GITHUB_CLIENT_SECRET
+              value: "your-github-client-secret"
+            - name: CALLBACK_URL
+              value: "https://init.nstsdc.org/auth/github/callback"
+            - name: JWT_SECRET
+              value: "change-this-to-a-random-secret"
 ---
 apiVersion: v1
 kind: Service
