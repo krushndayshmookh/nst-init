@@ -55,7 +55,7 @@ spec:
             - name: K8S_NAMESPACE
               value: "apps"
             - name: APP_ZONE
-              value: "dayshmookh.work"
+              value: "nstsdc.org"
 ---
 apiVersion: v1
 kind: Service
@@ -76,7 +76,7 @@ metadata:
   namespace: apps
 spec:
   rules:
-    - host: init.dayshmookh.work
+    - host: init.nstsdc.org
       http:
         paths:
           - path: /
