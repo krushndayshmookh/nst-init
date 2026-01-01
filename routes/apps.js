@@ -1,5 +1,6 @@
 const express = require('express')
 const { slug, validateK8sName } = require('../utils/helpers')
+const { requireAuth } = require('../middleware/auth')
 const {
   APP_ZONE,
   APP_SCHEME,
@@ -8,6 +9,7 @@ const {
   upsertIngress,
   listApps,
   removeApp,
+  getAppOwner,
 } = require('../utils/kubernetes')
 
 const router = express.Router()
@@ -28,19 +30,19 @@ router.get('/', async (req, res, next) => {
 /**
  * POST /api/apps
  * Deploy a new app or update existing one
+ * Requires authentication
  */
-router.post('/', async (req, res, next) => {
+router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { owner, appName, image, port } = req.body
+    const { appName, image, port } = req.body
+    const githubId = req.user.githubId
+    const githubUsername = req.user.username
 
-    const ownerSlug = slug(owner)
+    const ownerSlug = slug(githubUsername)
     const appNameSlug = slug(appName)
     const imageUrl = String(image || '').trim()
     const containerPort = parseInt(port, 10) || 8080
 
-    if (!ownerSlug) {
-      return res.status(400).json({ ok: false, error: 'Owner required' })
-    }
     if (!appNameSlug) {
       return res.status(400).json({ ok: false, error: 'App name required' })
     }
@@ -65,13 +67,13 @@ router.post('/', async (req, res, next) => {
 
     console.log(`Deploying app: ${internalName} (${imageUrl}:${containerPort})`)
 
-    await upsertDeployment(internalName, ownerSlug, imageUrl, containerPort)
-    await upsertService(internalName, containerPort)
+    await upsertDeployment(internalName, ownerSlug, imageUrl, containerPort, githubId)
+    await upsertService(internalName, containerPort, githubId)
 
     const host = `${appNameSlug}.${APP_ZONE}`
-    await upsertIngress(internalName, [host], ownerSlug)
+    await upsertIngress(internalName, [host], ownerSlug, githubId)
 
-    console.log(`App deployed: ${internalName} at ${APP_SCHEME}://${host}`)
+    console.log(`App deployed: ${internalName} at ${APP_SCHEME}://${host} by ${githubUsername}`)
 
     res.json({
       ok: true,
@@ -87,13 +89,24 @@ router.post('/', async (req, res, next) => {
 /**
  * DELETE /api/apps/:name
  * Remove an app and all its resources
+ * Requires authentication and ownership
  */
-router.delete('/:name', async (req, res, next) => {
+router.delete('/:name', requireAuth, async (req, res, next) => {
   try {
     const internalName = decodeURIComponent(req.params.name)
+    const githubId = req.session.user.githubId
     
     if (!validateK8sName(internalName)) {
       return res.status(400).json({ ok: false, error: 'Invalid app id' })
+    }
+
+    // Check ownership
+    const appOwner = await getAppOwner(internalName)
+    if (!appOwner) {
+      return res.status(404).json({ ok: false, error: 'App not found' })
+    }
+    if (appOwner !== String(githubId)) {
+      return res.status(403).json({ ok: false, error: 'You can only delete your own apps' })
     }
 
     await removeApp(internalName)

@@ -25,7 +25,7 @@ const net = kc.makeApiClient(k8s.NetworkingV1Api)
 /**
  * Create or update a Kubernetes Deployment
  */
-async function upsertDeployment(name, owner, image, containerPort) {
+async function upsertDeployment(name, owner, image, containerPort, githubId) {
   const body = {
     apiVersion: 'apps/v1',
     kind: 'Deployment',
@@ -35,6 +35,7 @@ async function upsertDeployment(name, owner, image, containerPort) {
       labels: {
         'app.kubernetes.io/managed-by': 'nst-init',
         'nst.owner': owner,
+        'nst.github-id': String(githubId),
       },
     },
     spec: {
@@ -72,14 +73,17 @@ async function upsertDeployment(name, owner, image, containerPort) {
 /**
  * Create or update a Kubernetes Service
  */
-async function upsertService(name, targetPort) {
+async function upsertService(name, targetPort, githubId) {
   const body = {
     apiVersion: 'v1',
     kind: 'Service',
     metadata: {
       name,
       namespace: NS,
-      labels: { 'app.kubernetes.io/managed-by': 'nst-init' },
+      labels: {
+        'app.kubernetes.io/managed-by': 'nst-init',
+        'nst.github-id': String(githubId),
+      },
     },
     spec: {
       selector: { app: name },
@@ -104,7 +108,7 @@ async function upsertService(name, targetPort) {
 /**
  * Create or update a Kubernetes Ingress
  */
-async function upsertIngress(name, hosts, owner) {
+async function upsertIngress(name, hosts, owner, githubId) {
   const ingName = `${name}-ing`
   const rules = (hosts || [])
     .map((h) => String(h || '').trim())
@@ -131,6 +135,7 @@ async function upsertIngress(name, hosts, owner) {
       labels: {
         'app.kubernetes.io/managed-by': 'nst-init',
         'nst.owner': owner,
+        'nst.github-id': String(githubId),
       },
     },
     spec: {
@@ -169,10 +174,12 @@ async function listApps() {
       : ingName
     const hosts = (ing?.spec?.rules || []).map((r) => r?.host).filter(Boolean)
     const owner = ing?.metadata?.labels?.['nst.owner'] || ''
+    const githubId = ing?.metadata?.labels?.['nst.github-id'] || null
     const createdAt = ing?.metadata?.creationTimestamp || ''
     return {
       internalName,
       owner,
+      githubId,
       hosts,
       urls: hosts.map((h) => `${APP_SCHEME}://${h}`),
       createdAt,
@@ -227,6 +234,20 @@ async function removeApp(name) {
   console.log(`Deleted app ${name}: ${deleted.join(', ')}`)
 }
 
+/**
+ * Get the GitHub ID of app owner
+ */
+async function getAppOwner(name) {
+  try {
+    const ingName = `${name}-ing`
+    const ing = await net.readNamespacedIngress({ name: ingName, namespace: NS })
+    return ing.metadata?.labels?.['nst.github-id'] || null
+  } catch (e) {
+    if (is404(e)) return null
+    throw e
+  }
+}
+
 module.exports = {
   NS,
   APP_ZONE,
@@ -236,4 +257,5 @@ module.exports = {
   upsertIngress,
   listApps,
   removeApp,
+  getAppOwner,
 }

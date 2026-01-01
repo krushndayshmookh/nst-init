@@ -41,15 +41,37 @@
     <div id="app">
       <div class="hero" :style="{ background: heroGradient }">
         <div class="container">
-          <h1>
-            <i
-              class="material-icons"
-              style="vertical-align: middle; font-size: 48px"
-              >cloud</i
-            >
-            NST init
-          </h1>
-          <p class="flow-text">Deploy your apps to Kubernetes in seconds</p>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h1>
+                <i
+                  class="material-icons"
+                  style="vertical-align: middle; font-size: 48px"
+                  >cloud</i
+                >
+                NST init
+              </h1>
+              <p class="flow-text">Deploy your apps to Kubernetes in seconds</p>
+            </div>
+            <div>
+              <div v-if="user" style="text-align: right;">
+                <div style="margin-bottom: 8px;">
+                  <img :src="user.avatar" style="width: 40px; height: 40px; border-radius: 50%; vertical-align: middle;" />
+                  <span style="margin-left: 10px; font-size: 18px;">{{ user.username }}</span>
+                </div>
+                <button @click="logout" class="btn waves-effect waves-light white purple-text">
+                  <i class="material-icons left">logout</i>
+                  Logout
+                </button>
+              </div>
+              <div v-else>
+                <a href="/auth/github" class="btn waves-effect waves-light white purple-text btn-large">
+                  <i class="material-icons left">login</i>
+                  Login with GitHub
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -59,16 +81,15 @@
             <div class="card">
               <div class="card-content">
                 <span class="card-title">Deploy New App</span>
-                <form @submit.prevent="deployApp">
-                  <div class="input-field">
-                    <input
-                      id="owner"
-                      v-model="form.owner"
-                      type="text"
-                      required />
-                    <label for="owner">Your Name</label>
-                  </div>
-
+                <div v-if="!user" class="center-align" style="padding: 40px 20px;">
+                  <i class="material-icons large grey-text">lock</i>
+                  <p class="grey-text">Please login with GitHub to deploy apps</p>
+                  <a href="/auth/github" class="btn waves-effect waves-light purple">
+                    <i class="material-icons left">login</i>
+                    Login with GitHub
+                  </a>
+                </div>
+                <form v-else @submit.prevent="deployApp">
                   <div class="input-field">
                     <input
                       id="appName"
@@ -238,10 +259,12 @@
                       </td>
                       <td>
                         <button
+                          v-if="canDelete(app)"
                           @click="removeApp(app.internalName)"
                           class="btn-small waves-effect waves-light red">
                           <i class="material-icons">delete</i>
                         </button>
+                        <span v-else class="grey-text">-</span>
                       </td>
                     </tr>
                   </tbody>
@@ -261,8 +284,8 @@
       createApp({
         data() {
           return {
+            user: null,
             form: {
-              owner: '',
               appName: '',
               image: '',
               port: '',
@@ -309,6 +332,43 @@
             this.messageColor = color
             this.messageIcon = icon
           },
+          canDelete(app) {
+            return this.user && app.githubId && String(app.githubId) === String(this.user.githubId)
+          },
+          async checkAuth() {
+            const token = localStorage.getItem('jwt_token')
+            if (!token) return
+
+            try {
+              const r = await fetch('/auth/user', {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+              const j = await r.json()
+              if (j.ok && j.user) {
+                this.user = j.user
+              } else {
+                // Invalid token, remove it
+                localStorage.removeItem('jwt_token')
+              }
+            } catch (error) {
+              console.error('Failed to check auth:', error)
+              localStorage.removeItem('jwt_token')
+            }
+          },
+          async logout() {
+            try {
+              localStorage.removeItem('jwt_token')
+              this.user = null
+              this.setMessage('Logged out successfully', 'green', 'check')
+              setTimeout(() => {
+                this.setMessage('Fill in the form and click Deploy to get started', 'grey', 'info')
+              }, 2000)
+            } catch (error) {
+              console.error('Logout failed:', error)
+            }
+          },
           async loadApps() {
             this.loading = true
             this.setMessage('')
@@ -331,10 +391,14 @@
             this.setMessage('Deploying…', 'blue')
             this.deployedUrl = ''
 
+            const token = localStorage.getItem('jwt_token')
             try {
               const r = await fetch('/api/apps', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
                 body: JSON.stringify(this.form),
               })
               const j = await r.json()
@@ -346,7 +410,7 @@
               this.deployedUrl = j.url || ''
 
               // Reset form
-              this.form = { owner: '', appName: '', image: '', port: '' }
+              this.form = { appName: '', image: '', port: '' }
               this.$nextTick(() => {
                 M.updateTextFields()
               })
@@ -360,11 +424,15 @@
             if (!confirm(`Remove ${internalName}?`)) return
 
             this.setMessage('Removing…', 'orange')
+            const token = localStorage.getItem('jwt_token')
             try {
               const r = await fetch(
                 '/api/apps/' + encodeURIComponent(internalName),
                 {
                   method: 'DELETE',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
                 }
               )
               const j = await r.json()
@@ -387,6 +455,16 @@
           },
         },
         mounted() {
+          // Check if token is in URL (from OAuth callback)
+          const urlParams = new URLSearchParams(window.location.search)
+          const token = urlParams.get('token')
+          if (token) {
+            localStorage.setItem('jwt_token', token)
+            // Remove token from URL
+            window.history.replaceState({}, document.title, '/')
+          }
+
+          this.checkAuth()
           this.loadApps()
           M.updateTextFields()
         },

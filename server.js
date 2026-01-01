@@ -2,6 +2,7 @@ const express = require('express')
 const path = require('path')
 const healthRoutes = require('./routes/health')
 const appsRoutes = require('./routes/apps')
+const authRoutes = require('./routes/auth')
 const errorHandler = require('./middleware/errorHandler')
 const { NS, APP_ZONE } = require('./utils/kubernetes')
 
@@ -20,6 +21,7 @@ app.use(express.urlencoded({ extended: true }))
 // API Routes
 app.use('/api', healthRoutes)
 app.use('/api/apps', appsRoutes)
+app.use('/auth', authRoutes)
 
 // Static files (public directory)
 app.use(express.static(PUBLIC_DIR))

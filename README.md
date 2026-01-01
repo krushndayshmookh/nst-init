@@ -28,27 +28,34 @@ Open <http://localhost:8080> in your browser.
 
 ### Deploy to Kubernetes
 
-1. First, update the domain in `k8s.yaml`. You need to replace `nstsdc.org` with your actual domain in:
-    - `APP_ZONE` environment variable in `Deployment` section (`spec.template.spec.containers.env`)
-    - `host` in `Ingress` section (`spec.rules.host`)
+1. **Create a GitHub OAuth App:**
+   - Go to GitHub Settings → Developer settings → OAuth Apps → New OAuth App
+   - Set Homepage URL: `https://init.nstsdc.org`
+   - Set Authorization callback URL: `https://init.nstsdc.org/auth/github/callback`
+   - Note down your Client ID and Client Secret
 
-    You can use this command to replace all occurrences:
+2. Update the GitHub credentials in `k8s.yaml`:
+   - Replace `your-github-client-id` with your GitHub OAuth Client ID
+   - Replace `your-github-client-secret` with your GitHub OAuth Client Secret
+   - Change `JWT_SECRET` to a random string
 
-    ```bash
-    # macOS
-    sed -i '' 's/nstsdc.org/yourdomain.com/g' k8s.yaml
-    
-    # Linux
-    sed -i 's/nstsdc.org/yourdomain.com/g' k8s.yaml
-    ```
+   If you need to use a different domain, replace `nstsdc.org`:
 
-2. Apply the Kubernetes manifests:
+   ```bash
+   # macOS
+   sed -i '' 's/nstsdc.org/yourdomain.com/g' k8s.yaml
+   
+   # Linux
+   sed -i 's/nstsdc.org/yourdomain.com/g' k8s.yaml
+   ```
 
-    ```bash
-    kubectl apply -f k8s.yaml
-    ```
+3. Apply the Kubernetes manifests:
 
-    The manifests use the pre-built image: `ghcr.io/krushndayshmookh/nst-init:latest`
+   ```bash
+   kubectl apply -f k8s.yaml
+   ```
+
+   The manifests use the pre-built image: `ghcr.io/krushndayshmookh/nst-init:latest`
 
 ### Build Custom Image (Optional)
 
@@ -72,3 +79,16 @@ Set these environment variables in your Kubernetes deployment:
 - `APP_ZONE` - Domain zone for ingress (default: `nstsdc.org`)
 - `APP_SCHEME` - URL scheme (default: `https`)
 - `PORT` - Server port (default: `8080`)
+- `GITHUB_CLIENT_ID` - GitHub OAuth App Client ID (required)
+- `GITHUB_CLIENT_SECRET` - GitHub OAuth App Client Secret (required)
+- `CALLBACK_URL` - GitHub OAuth callback URL (required)
+- `JWT_SECRET` - Secret for JWT token encryption (required)
+
+## Authentication
+
+NST init uses GitHub OAuth with JWT (JSON Web Tokens) for authentication. Users must login with GitHub to:
+
+- Deploy new applications
+- Delete their own deployments
+
+Viewing deployed apps is public and doesn't require authentication. JWT tokens are stored in browser localStorage and are valid for 7 days. Deployments are tracked by GitHub user ID, so ownership persists even if users change their GitHub username.
