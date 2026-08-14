@@ -94,7 +94,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 router.delete('/:name', requireAuth, async (req, res, next) => {
   try {
     const internalName = decodeURIComponent(req.params.name)
-    const githubId = req.session.user.githubId
+    const githubId = req.user.githubId
     
     if (!validateK8sName(internalName)) {
       return res.status(400).json({ ok: false, error: 'Invalid app id' })
